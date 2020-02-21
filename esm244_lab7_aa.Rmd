@@ -1,0 +1,165 @@
+---
+title: "ESM244 Lab 7"
+author: "Anna Abelman"
+date: "2/20/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+#general packages for stuff
+library(tidyverse)
+library(janitor)
+library(plotly)
+library(here)
+#packages for spatial stuff & point pattern analysis
+library(tmap)
+library(sf)
+library(spatstat)
+library(maptools)
+library(sp)
+#packages for cluster analysis:
+library(NbClust)
+library(cluster)
+library(factoextra)
+library(dendextend)
+library(ggdendro)
+```
+
+#### Get data
+
+Red tree voles in Humboldt County
+```{r}
+voles <- read_sf(here("data", "redtreevoledata"),
+                 layer = "ds033") %>% 
+  dplyr::select(COUNTY) %>% 
+  dplyr::filter(COUNTY == "HUM") %>% 
+  st_transform(crs = 4326) #keeping only the lat/long format
+
+#st_crs(voles)
+
+plot(voles)
+
+#read in data for Humboldt county
+humboldt <- read_sf(here("data", "redtreevoledata"),
+                 layer = "california_county_shape_file", crs = 4326) %>% 
+  filter(NAME == "Humboldt") %>% 
+  dplyr::select(NAME)
+
+#st_crs(humboldt)
+
+plot(humboldt)
+
+tm_shape(humboldt)+
+  tm_fill()+
+  tm_shape(voles)+
+  tm_dots(size = 0.15)
+
+#Geocomputation in R (Robin Lovelace)
+
+ggplot()+
+  geom_sf(data = humboldt)+
+  geom_sf(data = voles)
+
+```
+
+Convert vole events and Humboldt polygon to point pattern and window
+
+```{r}
+#voles_sp <- as(voles, "Spatial") #convert to spatial dataframe
+#voles_ppp <- as(voles_sp, "ppp")
+```
+
+#### Cluster analysis
+
+k-means
+```{r}
+iris_nice <- iris %>% 
+  clean_names
+
+ggplot(data = iris_nice)+
+  geom_point(aes(x = petal_length,
+                 y = petal_width, 
+                 color = species))
+
+#how many cluster do you think there should be for this dataset?
+
+number_est <- NbClust(iris_nice[1:4],
+                      min.nc = 2,
+                      max.nc = 10,
+                      method = "kmeans")
+#dindex is the number of clusters R finds (highest is 2) - but 3 species
+
+#do kmeans
+iris_km <- kmeans(iris_nice[1:4], 3) #must tell it the number of clusters
+
+#bind the cluster number together with the original data
+iris_cl <- data.frame(iris_nice, cluster_no = factor(iris_km$cluster))
+
+#plot different clusters
+ggplot(data = iris_cl)+
+  geom_point(aes(x = sepal_length, y = sepal_width, color = cluster_no))
+
+```
+
+```{r}
+plot_ly(x = iris_cl$petal_length,
+        y = iris_cl$petal_width,
+        z = iris_cl$sepal_length,
+        type = "scatter3d",
+        color = iris_cl$cluster_no)
+```
+
+#### Hierarchical cluster analysis
+
+ - `stats::hclust()` - agglomerative hierarchical clustering
+ - `cluster::diana()` - divisive hierarchical clustering
+ 
+```{r}
+#read in data
+wb_env <- read_csv(here("data", "wb_env.csv"))
+
+wb_ghg_20 <- wb_env %>% 
+  arrange(-ghg) %>% 
+  head(20)
+
+wb_scaled <- as.data.frame(scale(wb_ghg_20[3:7]))
+
+rownames(wb_scaled) <- wb_ghg_20$name
+
+#find distances (create a dissimilarity matrix)
+diss <- dist(wb_scaled, method = "euclidean", upper = TRUE)
+
+#use eclidean distances to do some complete agglomerative clustering
+hc_complete <- hclust(diss, method = "complete")
+
+#plot it
+plot(hc_complete, cex = 0.6, hang = -1)
+
+ggdendrogram(hc_complete,
+             rotate = TRUE)+
+  theme_minimal()+
+  labs(x = "Country")
+```
+China and US are similar to each other but VERY different from the rest of the countries
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
